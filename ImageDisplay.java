@@ -43,9 +43,6 @@ public class ImageDisplay {
 			return "("+r+", "+g+" ,"+ b +")";
 		}
 	}
-	
-	RGB[][][] inputForeground = new RGB[frames][height][width];
-	RGB[][][] inputBackground = new RGB[frames][height][width];
 
 	private RGB HSVtoRGB(HSV hsv) {
 		int r, g, b;
@@ -113,7 +110,7 @@ public class ImageDisplay {
 	/** Read Image RGB
 	 *  Reads the image of given width and height at the given imgPath into the provided BufferedImage.
 	 */
-	private void readImageRGB(String imgPath, BufferedImage img)
+	private void readImageRGB(String imgPath, String backgroundPath, BufferedImage img)
 	{
 		try
 		{
@@ -123,10 +120,16 @@ public class ImageDisplay {
 			RandomAccessFile raf = new RandomAccessFile(file, "r");
 			raf.seek(0);
 
-			long len = frameLength;
-			byte[] bytes = new byte[(int) len];
+			byte[] bytes = new byte[frameLength];
 
 			raf.read(bytes);
+
+			File backgroundFile = new File(backgroundPath);
+			RandomAccessFile backgroundRaf = new RandomAccessFile(backgroundFile, "r");
+			backgroundRaf.seek(0);
+			byte[] backgroundBytes = new byte[frameLength];
+
+			backgroundRaf.read(backgroundBytes);
 
 			int ind = 0;
 
@@ -139,31 +142,32 @@ public class ImageDisplay {
 					int g = Byte.toUnsignedInt(bytes[ind+height*width]);
 					int b = Byte.toUnsignedInt(bytes[ind+height*width*2]); 
 
-					//int pix = ((a << 24) + (r << 16) + (g << 8) + b);
-					
-					// img.setRGB(x,y,pix);
-					ind++;
-
 					RGB rgb = new RGB(r,g,b);
 					HSV hsv = RGBtoHSV(rgb);
 					if(Math.abs(hsv.h - h_greencenter) < h_threshold && hsv.s > s_threshold && hsv.v > v_threshold){
-						hsv.h = 0;
-						hsv.s = 1;
-						hsv.v = 1;
+						// hsv.h = 0;
+						// hsv.s = 1;
+						// hsv.v = 1;
+						r = Byte.toUnsignedInt(backgroundBytes[ind]);
+						g = Byte.toUnsignedInt(backgroundBytes[ind+height*width]);
+						b = Byte.toUnsignedInt(backgroundBytes[ind+height*width*2]); 
+					} else {
+
+						rgb = HSVtoRGB(hsv);
+
+						r = rgb.r;
+						g = rgb.g;
+						b = rgb.b;
 					}
-
-					rgb = HSVtoRGB(hsv);
-
-					r = rgb.r;
-					g = rgb.g;
-					b = rgb.b;
-
 					int pix = 0xff000000 | ((r & 0xff) << 16) | ((g & 0xff) << 8) | (b & 0xff);
 					
 					img.setRGB(x,y,pix);
-
+					ind++;
 				}
 			}
+
+			raf.close();
+			backgroundRaf.close();
 		}
 		catch (FileNotFoundException e) 
 		{
@@ -172,6 +176,8 @@ public class ImageDisplay {
 		catch (IOException e) 
 		{
 			e.printStackTrace();
+		} finally {
+			
 		}
 	}
 
@@ -183,12 +189,34 @@ public class ImageDisplay {
 
 		// Read in the specified image
 		outputVideo = new BufferedImage[480];
+
+		char ch = args[0].charAt(args[0].length()-1);
+		if( ch == '\\' || ch == '/') {
+			args[0] = args[0].substring(0, args[0].length()-1);
+		}
+		
+		ch = args[1].charAt(args[1].length()-1);
+		if( ch == '\\' || ch == '/') {
+			args[1] = args[1].substring(0, args[1].length()-1);
+		}
+
 		String filename = args[0].substring(args[0].lastIndexOf('/')+1);
-		String path = args[0].concat("//").concat(filename).concat(".");
-		for(int i = 0; i < frames; i++) {
-			outputVideo[i] = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
-			String thisRGB = path.concat(String.format("%04d", i)).concat(".rgb");
-			readImageRGB(thisRGB, outputVideo[i]);
+		String path = args[0].concat("/").concat(filename).concat(".");
+		String background = args[1].substring(args[1].lastIndexOf('/')+1);
+		String backgroundPath = args[1].concat("/").concat(background).concat(".");
+		int mode = Integer.parseInt(args[2]);
+
+		if(mode == 1) {
+			for(int i = 0; i < frames; i++) {
+				outputVideo[i] = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+				String thisRGB = path.concat(String.format("%04d", i)).concat(".rgb");
+				String backgroundRGB = backgroundPath.concat(String.format("%04d", i)).concat(".rgb");
+				readImageRGB(thisRGB, backgroundRGB, outputVideo[i]);
+			}
+		}
+
+		if(mode == 0) {
+
 		}
 
 		// Use label to display the image
