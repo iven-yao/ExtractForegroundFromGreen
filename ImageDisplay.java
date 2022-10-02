@@ -200,10 +200,13 @@ public class ImageDisplay {
 			args[1] = args[1].substring(0, args[1].length()-1);
 		}
 
-		String filename = args[0].substring(args[0].lastIndexOf('/')+1);
-		String path = args[0].concat("/").concat(filename).concat(".");
-		String background = args[1].substring(args[1].lastIndexOf('/')+1);
-		String backgroundPath = args[1].concat("/").concat(background).concat(".");
+		String fPath = args[0].replace("\\","/");
+		String bPath = args[1].replace("\\","/");
+
+		String filename = fPath.substring(fPath.lastIndexOf('/')+1);
+		String path = fPath.concat("/").concat(filename).concat(".");
+		String background = bPath.substring(bPath.lastIndexOf('/')+1);
+		String backgroundPath = bPath.concat("/").concat(background).concat(".");
 		int mode = Integer.parseInt(args[2]);
 
 		if(mode == 1) {
