@@ -189,9 +189,9 @@ public class VideoDisplay {
 				}
 			}
 
-			// perform Gaussian blur 2D with 3x3 kernel
-			outputRGB = gaussianBlurRow(outputRGB);
-			outputRGB = gaussianBlurCol(outputRGB);
+			// perform Gaussian blur
+			outputRGB = gaussianBlur5x5Row(outputRGB);
+			// outputRGB = gaussianBlur5x5Col(outputRGB);
 
 			// set img rgb
 			setImgRGB(outputRGB, img);
@@ -211,239 +211,100 @@ public class VideoDisplay {
 		}
 	}
 
-	private RGB[][] gaussianBlurRow(RGB[][] outputRGB) {
+	private RGB[][] gaussianBlur3x3Row(RGB[][] outputRGB) {
+		int[][] coefficient = {{1,2,1},{2,4,2},{1,2,1}};
 		for(int y = 0; y < height; y++) 
 		{
 			for(int x = 0; x < width; x++)
 			{
-				int r,g,b, count = 4;
-				r = outputRGB[y][x].r * 4;
-				g = outputRGB[y][x].g * 4;
-				b = outputRGB[y][x].b * 4;
-					
-				/* 
-					* __|__|__
-					* _#|__|__
-					*   |  |
-					*/
-				if(x > 0)
-				{
-					count += 2;
-					r += outputRGB[y][x-1].r * 2;
-					g += outputRGB[y][x-1].g * 2;
-					b += outputRGB[y][x-1].b * 2;
+				int r = 0, g = 0, b = 0;
+				for(int i = -1; i <=1; i++){
+					for(int j = -1; j <=1; j++){
+						r += outputRGB[y+i][x+j].r * coefficient[i+1][j+1];
+						g += outputRGB[y+i][x+j].g * coefficient[i+1][j+1];
+						b += outputRGB[y+i][x+j].b * coefficient[i+1][j+1];
+					}
 				}
-				/*
-					* __|_#|__
-					* __|__|__
-					*   |  |
-					*/
-				if(y > 0)
-				{
-					count += 2;
-					r += outputRGB[y-1][x].r * 2;
-					g += outputRGB[y-1][x].g * 2;
-					b += outputRGB[y-1][x].b * 2;
-				}
-				/*
-					* _#|__|__
-					* __|__|__
-					*   |  |
-					*/
-				if(x > 0 && y > 0) 
-				{
-					count++;
-					r += outputRGB[y-1][x-1].r;
-					g += outputRGB[y-1][x-1].g;
-					b += outputRGB[y-1][x-1].b;
-				}
-				/*
-					* __|__|__
-					* __|__|#_
-					*   |  |
-					*/
-				if(x < width-1)
-				{
-					count += 2;
-					r += outputRGB[y][x+1].r * 2;
-					g += outputRGB[y][x+1].g * 2;
-					b += outputRGB[y][x+1].b * 2;
-				}
-				/*
-					* __|__|__
-					* __|__|__
-					*   | #|
-					*/
-				if(y < height-1)
-				{
-					count += 2;
-					r += outputRGB[y+1][x].r * 2;
-					g += outputRGB[y+1][x].g * 2;
-					b += outputRGB[y+1][x].b * 2;
-				}
-				/*
-					* __|__|__
-					* __|__|__
-					*   |  |#
-					*/
-				if(x < width-1 && y < height-1)
-				{
-					count++;
-					r += outputRGB[y+1][x+1].r;
-					g += outputRGB[y+1][x+1].g;
-					b += outputRGB[y+1][x+1].b;
-				}
-				/*
-					* __|__|#_
-					* __|__|__
-					*   |  |
-					*/
-				if(x < width-1 && y > 0)
-				{
-					count++;
-					r += outputRGB[y-1][x+1].r;
-					g += outputRGB[y-1][x+1].g;
-					b += outputRGB[y-1][x+1].b;
-				}
-				/*
-					* __|__|__
-					* __|__|__
-					*  #|  |
-					*/
-				if(x > 0 && y < height-1)
-				{
-					count++;
-					r += outputRGB[y+1][x-1].r;
-					g += outputRGB[y+1][x-1].g;
-					b += outputRGB[y+1][x-1].b;
-				}
-				
-				r = r/count;
-				g = g/count;
-				b = b/count;
-				outputRGB[y][x] = new RGB(r,g,b);
+				r /= 16;
+				g /= 16;
+				b /= 16;
+
+				outputRGB[y][x] = new RGB(r, g, b);
 			}
 		}
 
 		return outputRGB;
 	}
 
-	private RGB[][] gaussianBlurCol(RGB[][] outputRGB) {
+	private RGB[][] gaussianBlur3x3Col(RGB[][] outputRGB) {
+		int[][] coefficient = {{1,2,1},{2,4,2},{1,2,1}};
 		for(int x = 0; x < width; x++) 
 		{
 			for(int y = 0; y < height; y++)
 			{
-				int r,g,b, count = 4;
-				r = outputRGB[y][x].r * 4;
-				g = outputRGB[y][x].g * 4;
-				b = outputRGB[y][x].b * 4;
-				
-				/* 
-					* __|__|__
-					* _#|__|__
-					*   |  |
-					*/
-				if(x > 0)
-				{
-					count += 2;
-					r += outputRGB[y][x-1].r * 2;
-					g += outputRGB[y][x-1].g * 2;
-					b += outputRGB[y][x-1].b * 2;
+				int r = 0, g = 0, b = 0;
+				for(int i = -1; i <=1; i++){
+					for(int j = -1; j <=1; j++){
+						r += outputRGB[y+i][x+j].r * coefficient[i+1][j+1];
+						g += outputRGB[y+i][x+j].g * coefficient[i+1][j+1];
+						b += outputRGB[y+i][x+j].b * coefficient[i+1][j+1];
+					}
 				}
-				/*
-					* __|_#|__
-					* __|__|__
-					*   |  |
-					*/
-				if(y > 0)
-				{
-					count += 2;
-					r += outputRGB[y-1][x].r * 2;
-					g += outputRGB[y-1][x].g * 2;
-					b += outputRGB[y-1][x].b * 2;
-				}
-				/*
-					* _#|__|__
-					* __|__|__
-					*   |  |
-					*/
-				if(x > 0 && y > 0) 
-				{
-					count++;
-					r += outputRGB[y-1][x-1].r;
-					g += outputRGB[y-1][x-1].g;
-					b += outputRGB[y-1][x-1].b;
-				}
-				/*
-					* __|__|__
-					* __|__|#_
-					*   |  |
-					*/
-				if(x < width-1)
-				{
-					count += 2;
-					r += outputRGB[y][x+1].r * 2;
-					g += outputRGB[y][x+1].g * 2;
-					b += outputRGB[y][x+1].b * 2;
-				}
-				/*
-					* __|__|__
-					* __|__|__
-					*   | #|
-					*/
-				if(y < height-1)
-				{
-					count += 2;
-					r += outputRGB[y+1][x].r * 2;
-					g += outputRGB[y+1][x].g * 2;
-					b += outputRGB[y+1][x].b * 2;
-				}
-				/*
-					* __|__|__
-					* __|__|__
-					*   |  |#
-					*/
-				if(x < width-1 && y < height-1)
-				{
-					count++;
-					r += outputRGB[y+1][x+1].r;
-					g += outputRGB[y+1][x+1].g;
-					b += outputRGB[y+1][x+1].b;
-				}
-				/*
-					* __|__|#_
-					* __|__|__
-					*   |  |
-					*/
-				if(x < width-1 && y > 0)
-				{
-					count++;
-					r += outputRGB[y-1][x+1].r;
-					g += outputRGB[y-1][x+1].g;
-					b += outputRGB[y-1][x+1].b;
-				}
-				/*
-					* __|__|__
-					* __|__|__
-					*  #|  |
-					*/
-				if(x > 0 && y < height-1)
-				{
-					count++;
-					r += outputRGB[y+1][x-1].r;
-					g += outputRGB[y+1][x-1].g;
-					b += outputRGB[y+1][x-1].b;
-				}
-				
-				r = r/count;
-				g = g/count;
-				b = b/count;
-				// int pix = 0xff000000 | ((r & 0xff) << 16) | ((g & 0xff) << 8) | (b & 0xff);
-				// img.setRGB(x,y,pix);
+				r /= 16;
+				g /= 16;
+				b /= 16;
 
-				outputRGB[y][x] = new RGB(r,g,b);
+				outputRGB[y][x] = new RGB(r, g, b);
 			}
 		}
+		return outputRGB;
+	}
+
+	private RGB[][] gaussianBlur5x5Row(RGB[][] outputRGB) {
+		int[][] coefficient = {{1,4,7,4,1},{4,16,26,16,4},{7,26,41,26,7},{4,16,26,16,4},{1,4,7,4,1}};
+
+		for(int y = 2; y < height-2; y++){
+			for(int x = 2; x < width-2; x++) {
+				int r = 0, g = 0, b = 0;
+				for(int i = -2; i <=2; i++){
+					for(int j = -2; j <=2; j++){
+						r += outputRGB[y+i][x+j].r * coefficient[i+2][j+2];
+						g += outputRGB[y+i][x+j].g * coefficient[i+2][j+2];
+						b += outputRGB[y+i][x+j].b * coefficient[i+2][j+2];
+					}
+				}
+				r /= 273;
+				g /= 273;
+				b /= 273;
+
+				outputRGB[y][x] = new RGB(r, g, b);
+			}
+		}
+
+		return outputRGB;
+	}
+
+	private RGB[][] gaussianBlur5x5Col(RGB[][] outputRGB) {
+		int[][] coefficient = {{1,4,7,4,1},{4,16,26,16,4},{7,26,41,26,7},{4,16,26,16,4},{1,4,7,4,1}};
+
+		for(int x = 2; x < width-2; x++){
+			for(int y = 2; y < height-2; y++) {
+				int r = 0, g = 0, b = 0;
+				for(int i = -2; i <=2; i++){
+					for(int j = -2; j <=2; j++){
+						r += outputRGB[y+i][x+j].r * coefficient[i+2][j+2];
+						g += outputRGB[y+i][x+j].g * coefficient[i+2][j+2];
+						b += outputRGB[y+i][x+j].b * coefficient[i+2][j+2];
+					}
+				}
+				r /= 273;
+				g /= 273;
+				b /= 273;
+
+				outputRGB[y][x] = new RGB(r, g, b);
+			}
+		}
+
 		return outputRGB;
 	}
 
