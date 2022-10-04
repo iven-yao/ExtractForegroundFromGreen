@@ -21,6 +21,19 @@ public class ImageDisplay {
 		}
 	}
 
+	class YUV{
+		double y,u,v;
+		public YUV(double y, double u, double v) {
+			this.y = y;
+			this.u = u;
+			this.v = v;
+		}
+
+		public String toString(){
+			return "("+y+", "+u+" ,"+ v +")";
+		}
+	}
+
 	class RGB{
 		int r,g,b;
 		public RGB(int r, int g, int b) {
@@ -50,15 +63,17 @@ public class ImageDisplay {
 	int height = 480;
 	int frames = 480; 
 	int kernel = 3;// 3 or 5
-	int diff_threshold = 15; // rgb diff with former frame
 	int h_threshold = 50; // h threshold, out of h_greencenter +- h_threshold should be extracted as foreground
 	int h_greencenter = 120; 
 	double s_threshold = 0.22; // s less than s_threshold should be extracted as foreground
 	double v_threshold = 0.28; // v less than v_threshold should be extracted as foreground 
+
+	int diffCode = 2; //1:RGB 2:YUV 3:HSV
+	double diff_threshold = 0.01; // rgb/yuv/hsv diff with former frame
 	long fps = 1000/24; // default
 	boolean useColorBackground = false;
-	RGB[][] formerFrame;
-	int[][] foregroundMap;
+	RGB[][] formerRGB;
+	YUV[][] formerYUV;
 	
 	private RGB HSVtoRGB(HSV hsv) {
 		int r, g, b;
@@ -116,11 +131,136 @@ public class ImageDisplay {
 		cmin = Math.min(r, Math.min(g, b));
 		diff = cmax - cmin;
 
-		h = cmax == 0? 0: cmax == r? 60*((g-b)/diff)%6: cmax == g? 60*(((b-r)/diff) +2): 60*(((r-g)/diff)+4);
+		h = diff == 0? 0: cmax == r? 60*((g-b)/diff)%6: cmax == g? 60*(((b-r)/diff) +2): 60*(((r-g)/diff)+4);
 		s = cmax == 0? 0: diff / cmax;
 		v = cmax;
 
+		
+
 		return new HSV(h, s, v);
+	}
+
+	private YUV RGBtoYUV(RGB rgb){
+		double y = 0.299*rgb.r + 0.587*rgb.g + 0.114*rgb.b;
+		double u = 0.596*rgb.r - 0.274*rgb.g - 0.322*rgb.b;
+		double v = 0.211*rgb.r - 0.523*rgb.g + 0.312*rgb.b;
+
+		return new YUV(y,u,v);
+	}
+
+	/** Mode 0
+	 *  comparing to former frame, extract the pixels that changed
+	 *  merge with background video
+	 */
+	private void backgroundSubstraction(String imgPath, String backgroundPath, BufferedImage img, int i)
+	{
+		try
+		{
+			boolean first = false;
+			int frameLength = width*height*3;
+
+			File file = new File(imgPath);
+			RandomAccessFile raf = new RandomAccessFile(file, "r");
+			raf.seek(0);
+
+			byte[] bytes = new byte[frameLength];
+
+			raf.read(bytes);
+
+			File backgroundFile = new File(backgroundPath);
+			RandomAccessFile backgroundRaf = new RandomAccessFile(backgroundFile, "r");
+			backgroundRaf.seek(0);
+			byte[] backgroundBytes = new byte[frameLength];
+
+			backgroundRaf.read(backgroundBytes);
+
+			if(formerYUV == null) {
+				// formerRGB = new RGB[height][width];
+				formerYUV = new YUV[height][width];
+				first = true;
+			}
+
+			RGB[][] outputRGB = new RGB[height][width];
+			int ind = 0;
+			// read input, covert to yuv space
+			for(int y = 0; y < height; y++)
+			{
+				for(int x = 0; x < width; x++)
+				{
+					int r = Byte.toUnsignedInt(bytes[ind]);
+					int g = Byte.toUnsignedInt(bytes[ind+height*width]);
+					int b = Byte.toUnsignedInt(bytes[ind+height*width*2]); 
+
+					RGB rgb = new RGB(r,g,b);
+					YUV yuv = RGBtoYUV(rgb);
+
+					// RGB frgb = formerRGB[y][x];
+					YUV fyuv = formerYUV[y][x];
+
+					if(first) {
+						if(useColorBackground) {
+							r = 0;
+							g = 255;
+							b = 0;
+						} else {
+							r = Byte.toUnsignedInt(backgroundBytes[ind]);
+							g = Byte.toUnsignedInt(backgroundBytes[ind+height*width]);
+							b = Byte.toUnsignedInt(backgroundBytes[ind+height*width*2]); 
+						}
+						// formerRGB[y][x] = rgb;
+						formerYUV[y][x] = yuv;
+					} else {
+						// double diffRGB = (Math.abs((double)r - frgb.r)/255
+						// 			+ Math.abs((double)g - frgb.g)/255
+						// 			+ Math.abs((double)b - frgb.b)/255)/3;
+
+						double diffYUV = (Math.abs(yuv.y - fyuv.y)/255
+									+ Math.abs(yuv.u - fyuv.u)/255
+									+ Math.abs(yuv.v - fyuv.v)/255)/3;
+
+						boolean shouldBePreserved =(diffYUV > 0.10);//  (diffRGB > 0.4) || 
+
+						if(!shouldBePreserved){
+							if(useColorBackground) {
+								r = 0;
+								g = 255;
+								b = 0;
+							} else {
+								r = Byte.toUnsignedInt(backgroundBytes[ind]);
+								g = Byte.toUnsignedInt(backgroundBytes[ind+height*width]);
+								b = Byte.toUnsignedInt(backgroundBytes[ind+height*width*2]); 
+							}
+						} 
+
+						// formerRGB[y][x] = new RGB((rgb.r+frgb.r*(i-1))/i,(rgb.g+frgb.g*(i-1))/i,(rgb.b+frgb.b*(i-1))/i);
+						formerYUV[y][x] = new YUV((yuv.y+fyuv.y*(i-1))/i,(yuv.u+fyuv.u*(i-1))/i,(yuv.v+fyuv.v*(i-1))/i);
+					}
+
+					
+					outputRGB[y][x] = new RGB(r,g,b);
+					ind++;
+				}
+			}
+
+			// perform Gaussian Blur
+			outputRGB = gaussianBlur(outputRGB, kernel);
+
+			// set img
+			setImgRGB(outputRGB, img);
+
+			raf.close();
+			backgroundRaf.close();
+		}
+		catch (FileNotFoundException e) 
+		{
+			e.printStackTrace();
+		} 
+		catch (IOException e) 
+		{
+			e.printStackTrace();
+		} finally {
+			
+		}
 	}
 
 	/** Mode 1
@@ -155,7 +295,6 @@ public class ImageDisplay {
 			int ind = 0;
 
 			RGB[][] outputRGB = new RGB[height][width];
-			foregroundMap = new int[height][width];
 
 			for(int y = 0; y < height; y++)
 			{
@@ -173,8 +312,6 @@ public class ImageDisplay {
 						r = (rgb.r);
 						g = (rgb.g);
 						b = (rgb.b);
-
-						foregroundMap[y][x] = 1;
 					} else {
 						if(useColorBackground){
 							r = 255;
@@ -185,7 +322,6 @@ public class ImageDisplay {
 							g = Byte.toUnsignedInt(backgroundBytes[ind+height*width]);
 							b = Byte.toUnsignedInt(backgroundBytes[ind+height*width*2]); 
 						}
-						foregroundMap[y][x] = 1;
 					}
 
 					// if(Math.abs(hsv.h - h_greencenter) < h_threshold && hsv.s > s_threshold && hsv.v > v_threshold){
@@ -253,7 +389,6 @@ public class ImageDisplay {
 		{
 			for(int x = 1; x < width-1; x++)
 			{
-				if(foregroundMap[y][x] == 0) continue;
 				int r = 0, g = 0, b = 0;
 				for(int i = -1; i <=1; i++){
 					for(int j = -1; j <=1; j++){
@@ -279,7 +414,6 @@ public class ImageDisplay {
 		{
 			for(int y = 1; y < height-1; y++)
 			{
-				if(foregroundMap[y][x] == 0) continue;
 				int r = 0, g = 0, b = 0;
 				for(int i = -1; i <=1; i++){
 					for(int j = -1; j <=1; j++){
@@ -303,7 +437,6 @@ public class ImageDisplay {
 
 		for(int y = 2; y < height-2; y++){
 			for(int x = 2; x < width-2; x++) {
-				if(foregroundMap[y][x] == 0) continue;
 				int r = 0, g = 0, b = 0;
 				for(int i = -2; i <=2; i++){
 					for(int j = -2; j <=2; j++){
@@ -328,7 +461,6 @@ public class ImageDisplay {
 
 		for(int x = 2; x < width-2; x++){
 			for(int y = 2; y < height-2; y++) {
-				if(foregroundMap[y][x] == 0) continue;
 				int r = 0, g = 0, b = 0;
 				for(int i = -2; i <=2; i++){
 					for(int j = -2; j <=2; j++){
@@ -360,94 +492,6 @@ public class ImageDisplay {
 				int pix = 0xff000000 | ((r & 0xff) << 16) | ((g & 0xff) << 8) | (b & 0xff);		
 				img.setRGB(x,y,pix);
 			}
-		}
-	}
-
-	/** Mode 0
-	 *  comparing to former frame, extract the pixels that changed
-	 *  merge with background video
-	 */
-	private void backgroundSubstraction(String imgPath, String backgroundPath, BufferedImage img)
-	{
-		try
-		{
-			boolean first = false;
-			int frameLength = width*height*3;
-
-			File file = new File(imgPath);
-			RandomAccessFile raf = new RandomAccessFile(file, "r");
-			raf.seek(0);
-
-			byte[] bytes = new byte[frameLength];
-
-			raf.read(bytes);
-
-			File backgroundFile = new File(backgroundPath);
-			RandomAccessFile backgroundRaf = new RandomAccessFile(backgroundFile, "r");
-			backgroundRaf.seek(0);
-			byte[] backgroundBytes = new byte[frameLength];
-
-			backgroundRaf.read(backgroundBytes);
-
-			if(formerFrame == null) {
-				formerFrame = new RGB[height][width];
-				first = true;
-			}
-
-			int ind = 0;
-			// read input, covert to yuv space
-			for(int y = 0; y < height; y++)
-			{
-				for(int x = 0; x < width; x++)
-				{
-					int r = Byte.toUnsignedInt(bytes[ind]);
-					int g = Byte.toUnsignedInt(bytes[ind+height*width]);
-					int b = Byte.toUnsignedInt(bytes[ind+height*width*2]); 
-
-					RGB rgb = new RGB(r,g,b);
-					if(first) {
-						r = 0;
-						g = 255;
-						b = 0;
-						// r = Byte.toUnsignedInt(backgroundBytes[ind]);
-						// g = Byte.toUnsignedInt(backgroundBytes[ind+height*width]);
-						// b = Byte.toUnsignedInt(backgroundBytes[ind+height*width*2]); 
-					} else {
-						int diff = Math.abs(r - formerFrame[y][x].r)
-									+ Math.abs(g - formerFrame[y][x].g)
-									+ Math.abs(b - formerFrame[y][x].b);
-
-						if(diff < diff_threshold){
-							r = 0;
-							g = 255;
-							b = 0;
-							// r = Byte.toUnsignedInt(backgroundBytes[ind]);
-							// g = Byte.toUnsignedInt(backgroundBytes[ind+height*width]);
-							// b = Byte.toUnsignedInt(backgroundBytes[ind+height*width*2]); 
-						} 
-					}
-
-					formerFrame[y][x] = rgb;
-
-					int pix = 0xff000000 | ((r & 0xff) << 16) | ((g & 0xff) << 8) | (b & 0xff);
-					
-					img.setRGB(x,y,pix);
-					ind++;
-				}
-			}
-
-			raf.close();
-			backgroundRaf.close();
-		}
-		catch (FileNotFoundException e) 
-		{
-			e.printStackTrace();
-		} 
-		catch (IOException e) 
-		{
-			e.printStackTrace();
-		} finally {
-			
 		}
 	}
 
@@ -493,7 +537,7 @@ public class ImageDisplay {
 				outputVideo[i] = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
 				String foregroundRGB = path.concat(String.format("%04d", i)).concat(".rgb");
 				String backgroundRGB = backgroundPath.concat(String.format("%04d", i)).concat(".rgb");
-				backgroundSubstraction(foregroundRGB, backgroundRGB, outputVideo[i]);
+				backgroundSubstraction(foregroundRGB, backgroundRGB, outputVideo[i], i);
 			}
 		}
 
@@ -531,7 +575,6 @@ public class ImageDisplay {
 		try {
 			ren.showIms(args);
 		} catch (InterruptedException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 	}
