@@ -5,20 +5,8 @@ import java.io.*;
 import javax.swing.*;
 
 
-public class VideoDisplay {
+public class ImageDisplay {
 
-	JFrame frame, frame_output;
-	JLabel lbIm1, lbIm2;
-	BufferedImage outputVideo[];
-	int width = 640; // default image width and height
-	int height = 480;
-	int frames = 480;
-	int h_threshold = 50;
-	int h_greencenter = 120;
-	double s_threshold = 0.22;
-	double v_threshold = 0.28;
-	long fps = 1000/24;
-	boolean useColorBackground = false;
 
 	class HSV{
 		double h,s,v;
@@ -44,8 +32,34 @@ public class VideoDisplay {
 		public String toString(){
 			return "("+r+", "+g+" ,"+ b +")";
 		}
+
+		public boolean equals(Object o) {
+			if(o == this) return true;
+			if(!(o instanceof RGB)) return false;
+			
+			RGB c = (RGB) o;
+			return (this.r==c.r && this.g == c.g && this.b == c.b);
+		}
 	}
 
+
+	JFrame frame, frame_output;
+	JLabel lbIm1, lbIm2;
+	BufferedImage outputVideo[];
+	int width = 640; // default image width and height
+	int height = 480;
+	int frames = 480; 
+	int kernel = 3;// 3 or 5
+	int diff_threshold = 15; // rgb diff with former frame
+	int h_threshold = 50; // h threshold, out of h_greencenter +- h_threshold should be extracted as foreground
+	int h_greencenter = 120; 
+	double s_threshold = 0.22; // s less than s_threshold should be extracted as foreground
+	double v_threshold = 0.28; // v less than v_threshold should be extracted as foreground 
+	long fps = 1000/24; // default
+	boolean useColorBackground = false;
+	RGB[][] formerFrame;
+	int[][] foregroundMap;
+	
 	private RGB HSVtoRGB(HSV hsv) {
 		int r, g, b;
 		double c, x, m, r_1, g_1, b_1;
@@ -109,8 +123,13 @@ public class VideoDisplay {
 		return new HSV(h, s, v);
 	}
 
-	/** Read Image RGB
-	 *  Reads the image of given width and height at the given imgPath into the provided BufferedImage.
+	/** Mode 1
+	 *  detect green screen and crop the foreground out of it and merge with background
+	 *  convert RGB into HSV color space
+	 *  specify green part with H,S,V thresholds
+	 *  substitute those pixels with background pixels
+	 *  perform gaussian blur to blend foreground and background
+	 *  output to bufferedImage img
 	 */
 	private void greenScreenDetect(String imgPath, String backgroundPath, BufferedImage img)
 	{
@@ -136,6 +155,7 @@ public class VideoDisplay {
 			int ind = 0;
 
 			RGB[][] outputRGB = new RGB[height][width];
+			foregroundMap = new int[height][width];
 
 			for(int y = 0; y < height; y++)
 			{
@@ -153,6 +173,8 @@ public class VideoDisplay {
 						r = (rgb.r);
 						g = (rgb.g);
 						b = (rgb.b);
+
+						foregroundMap[y][x] = 1;
 					} else {
 						if(useColorBackground){
 							r = 255;
@@ -163,6 +185,7 @@ public class VideoDisplay {
 							g = Byte.toUnsignedInt(backgroundBytes[ind+height*width]);
 							b = Byte.toUnsignedInt(backgroundBytes[ind+height*width*2]); 
 						}
+						foregroundMap[y][x] = 1;
 					}
 
 					// if(Math.abs(hsv.h - h_greencenter) < h_threshold && hsv.s > s_threshold && hsv.v > v_threshold){
@@ -190,8 +213,7 @@ public class VideoDisplay {
 			}
 
 			// perform Gaussian blur
-			outputRGB = gaussianBlur5x5Row(outputRGB);
-			// outputRGB = gaussianBlur5x5Col(outputRGB);
+			outputRGB = gaussianBlur(outputRGB, kernel);
 
 			// set img rgb
 			setImgRGB(outputRGB, img);
@@ -211,12 +233,27 @@ public class VideoDisplay {
 		}
 	}
 
+	private RGB[][] gaussianBlur(RGB[][] outputRGB, int kernel) {
+		if(kernel == 3) {
+			outputRGB = gaussianBlur3x3Row(outputRGB);
+			outputRGB = gaussianBlur3x3Col(outputRGB);
+		} 
+
+		if(kernel == 5) {
+			outputRGB = gaussianBlur5x5Row(outputRGB);
+			outputRGB = gaussianBlur5x5Col(outputRGB);
+		}
+
+		return outputRGB;
+	}
+
 	private RGB[][] gaussianBlur3x3Row(RGB[][] outputRGB) {
 		int[][] coefficient = {{1,2,1},{2,4,2},{1,2,1}};
-		for(int y = 0; y < height; y++) 
+		for(int y = 1; y < height-1; y++) 
 		{
-			for(int x = 0; x < width; x++)
+			for(int x = 1; x < width-1; x++)
 			{
+				if(foregroundMap[y][x] == 0) continue;
 				int r = 0, g = 0, b = 0;
 				for(int i = -1; i <=1; i++){
 					for(int j = -1; j <=1; j++){
@@ -238,10 +275,11 @@ public class VideoDisplay {
 
 	private RGB[][] gaussianBlur3x3Col(RGB[][] outputRGB) {
 		int[][] coefficient = {{1,2,1},{2,4,2},{1,2,1}};
-		for(int x = 0; x < width; x++) 
+		for(int x = 1; x < width-1; x++) 
 		{
-			for(int y = 0; y < height; y++)
+			for(int y = 1; y < height-1; y++)
 			{
+				if(foregroundMap[y][x] == 0) continue;
 				int r = 0, g = 0, b = 0;
 				for(int i = -1; i <=1; i++){
 					for(int j = -1; j <=1; j++){
@@ -265,6 +303,7 @@ public class VideoDisplay {
 
 		for(int y = 2; y < height-2; y++){
 			for(int x = 2; x < width-2; x++) {
+				if(foregroundMap[y][x] == 0) continue;
 				int r = 0, g = 0, b = 0;
 				for(int i = -2; i <=2; i++){
 					for(int j = -2; j <=2; j++){
@@ -289,6 +328,7 @@ public class VideoDisplay {
 
 		for(int x = 2; x < width-2; x++){
 			for(int y = 2; y < height-2; y++) {
+				if(foregroundMap[y][x] == 0) continue;
 				int r = 0, g = 0, b = 0;
 				for(int i = -2; i <=2; i++){
 					for(int j = -2; j <=2; j++){
@@ -323,10 +363,15 @@ public class VideoDisplay {
 		}
 	}
 
-	private void substractMoving(String imgPath, String backgroundPath, BufferedImage img)
+	/** Mode 0
+	 *  comparing to former frame, extract the pixels that changed
+	 *  merge with background video
+	 */
+	private void backgroundSubstraction(String imgPath, String backgroundPath, BufferedImage img)
 	{
 		try
 		{
+			boolean first = false;
 			int frameLength = width*height*3;
 
 			File file = new File(imgPath);
@@ -344,8 +389,12 @@ public class VideoDisplay {
 
 			backgroundRaf.read(backgroundBytes);
 
+			if(formerFrame == null) {
+				formerFrame = new RGB[height][width];
+				first = true;
+			}
+
 			int ind = 0;
-			int former_r = 0, former_g = 0, former_b = 0;
 			// read input, covert to yuv space
 			for(int y = 0; y < height; y++)
 			{
@@ -356,22 +405,29 @@ public class VideoDisplay {
 					int b = Byte.toUnsignedInt(bytes[ind+height*width*2]); 
 
 					RGB rgb = new RGB(r,g,b);
-					HSV hsv = RGBtoHSV(rgb);
-					if(Math.abs(hsv.h - h_greencenter) < h_threshold && hsv.s > s_threshold && hsv.v > v_threshold){
-						// hsv.h = 0;
-						// hsv.s = 1;
-						// hsv.v = 1;
-						r = Byte.toUnsignedInt(backgroundBytes[ind]);
-						g = Byte.toUnsignedInt(backgroundBytes[ind+height*width]);
-						b = Byte.toUnsignedInt(backgroundBytes[ind+height*width*2]); 
+					if(first) {
+						r = 0;
+						g = 255;
+						b = 0;
+						// r = Byte.toUnsignedInt(backgroundBytes[ind]);
+						// g = Byte.toUnsignedInt(backgroundBytes[ind+height*width]);
+						// b = Byte.toUnsignedInt(backgroundBytes[ind+height*width*2]); 
 					} else {
+						int diff = Math.abs(r - formerFrame[y][x].r)
+									+ Math.abs(g - formerFrame[y][x].g)
+									+ Math.abs(b - formerFrame[y][x].b);
 
-						rgb = HSVtoRGB(hsv);
-
-						r = rgb.r;
-						g = rgb.g;
-						b = rgb.b;
+						if(diff < diff_threshold){
+							r = 0;
+							g = 255;
+							b = 0;
+							// r = Byte.toUnsignedInt(backgroundBytes[ind]);
+							// g = Byte.toUnsignedInt(backgroundBytes[ind+height*width]);
+							// b = Byte.toUnsignedInt(backgroundBytes[ind+height*width*2]); 
+						} 
 					}
+
+					formerFrame[y][x] = rgb;
 
 					int pix = 0xff000000 | ((r & 0xff) << 16) | ((g & 0xff) << 8) | (b & 0xff);
 					
@@ -437,7 +493,7 @@ public class VideoDisplay {
 				outputVideo[i] = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
 				String foregroundRGB = path.concat(String.format("%04d", i)).concat(".rgb");
 				String backgroundRGB = backgroundPath.concat(String.format("%04d", i)).concat(".rgb");
-				substractMoving(foregroundRGB, backgroundRGB, outputVideo[i]);
+				backgroundSubstraction(foregroundRGB, backgroundRGB, outputVideo[i]);
 			}
 		}
 
@@ -471,7 +527,7 @@ public class VideoDisplay {
 	}
 
 	public static void main(String[] args) {
-		VideoDisplay ren = new VideoDisplay();
+		ImageDisplay ren = new ImageDisplay();
 		try {
 			ren.showIms(args);
 		} catch (InterruptedException e) {
