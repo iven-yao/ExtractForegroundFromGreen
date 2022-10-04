@@ -5,7 +5,7 @@ import java.io.*;
 import javax.swing.*;
 
 
-public class VideoDisplay {
+public class ImageDisplay {
 
 	JFrame frame, frame_output;
 	JLabel lbIm1, lbIm2;
@@ -471,7 +471,7 @@ public class VideoDisplay {
 	}
 
 	public static void main(String[] args) {
-		VideoDisplay ren = new VideoDisplay();
+		ImageDisplay ren = new ImageDisplay();
 		try {
 			ren.showIms(args);
 		} catch (InterruptedException e) {
