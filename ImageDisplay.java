@@ -68,12 +68,11 @@ public class ImageDisplay {
 	double s_threshold = 0.22; // s less than s_threshold should be extracted as foreground
 	double v_threshold = 0.28; // v less than v_threshold should be extracted as foreground 
 
-	int diffCode = 2; //1:RGB 2:YUV 3:HSV
-	double diff_threshold = 0.01; // rgb/yuv/hsv diff with former frame
 	long fps = 1000/24; // default
 	boolean useColorBackground = false;
 	RGB[][] formerRGB;
 	YUV[][] formerYUV;
+	HSV[][] formerHSV;
 	
 	private RGB HSVtoRGB(HSV hsv) {
 		int r, g, b;
@@ -177,6 +176,7 @@ public class ImageDisplay {
 			if(formerYUV == null) {
 				// formerRGB = new RGB[height][width];
 				formerYUV = new YUV[height][width];
+				// formerHSV = new HSV[height][width];
 				first = true;
 			}
 
@@ -193,9 +193,11 @@ public class ImageDisplay {
 
 					RGB rgb = new RGB(r,g,b);
 					YUV yuv = RGBtoYUV(rgb);
+					// HSV hsv = RGBtoHSV(rgb);
 
 					// RGB frgb = formerRGB[y][x];
 					YUV fyuv = formerYUV[y][x];
+					// HSV fhsv = formerHSV[y][x];
 
 					if(first) {
 						if(useColorBackground) {
@@ -209,6 +211,7 @@ public class ImageDisplay {
 						}
 						// formerRGB[y][x] = rgb;
 						formerYUV[y][x] = yuv;
+						// formerHSV[y][x] = hsv;
 					} else {
 						// double diffRGB = (Math.abs((double)r - frgb.r)/255
 						// 			+ Math.abs((double)g - frgb.g)/255
@@ -218,7 +221,12 @@ public class ImageDisplay {
 									+ Math.abs(yuv.u - fyuv.u)/255
 									+ Math.abs(yuv.v - fyuv.v)/255)/3;
 
-						boolean shouldBePreserved =(diffYUV > 0.10);//  (diffRGB > 0.4) || 
+						// double diffHSV = (Math.abs(hsv.h - fhsv.h)/360
+						// + Math.abs(hsv.s - fhsv.s)
+						// + Math.abs(hsv.v - fhsv.v))/3;
+
+
+						boolean shouldBePreserved = (diffYUV > 0.10);//diffHSV > 0.30;//(diffYUV > 0.10);//  (diffRGB > 0.4) || 
 
 						if(!shouldBePreserved){
 							if(useColorBackground) {
@@ -234,6 +242,7 @@ public class ImageDisplay {
 
 						// formerRGB[y][x] = new RGB((rgb.r+frgb.r*(i-1))/i,(rgb.g+frgb.g*(i-1))/i,(rgb.b+frgb.b*(i-1))/i);
 						formerYUV[y][x] = new YUV((yuv.y+fyuv.y*(i-1))/i,(yuv.u+fyuv.u*(i-1))/i,(yuv.v+fyuv.v*(i-1))/i);
+						// formerHSV[y][x] = new HSV((hsv.h+fhsv.h*(i-1))/i,(hsv.s+fhsv.s*(i-1))/i,(hsv.v+fhsv.v*(i-1))/i);
 					}
 
 					
