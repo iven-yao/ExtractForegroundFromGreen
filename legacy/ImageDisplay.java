@@ -1,4 +1,4 @@
-
+package legacy;
 import java.awt.*;
 import java.awt.image.*;
 import java.io.*;
@@ -65,10 +65,14 @@ public class ImageDisplay {
 	int kernel = 3;// 3 or 5
 	int h_threshold = 50; // h threshold, out of h_greencenter +- h_threshold should be extracted as foreground
 	int h_greencenter = 120; 
-	double s_threshold = 0.218; // s less than s_threshold should be extracted as foreground
-	double v_threshold = 0.3; // v less than v_threshold should be extracted as foreground 
+	double s_threshold = 0.22; // s less than s_threshold should be extracted as foreground
+	double v_threshold = 0.28; // v less than v_threshold should be extracted as foreground 
+
 	long fps = 1000/24; // default
+	boolean useColorBackground = false;
+	RGB[][] formerRGB;
 	YUV[][] formerYUV;
+	HSV[][] formerHSV;
 	
 	private RGB HSVtoRGB(HSV hsv) {
 		int r, g, b;
@@ -170,52 +174,75 @@ public class ImageDisplay {
 			backgroundRaf.read(backgroundBytes);
 
 			if(formerYUV == null) {
+				// formerRGB = new RGB[height][width];
 				formerYUV = new YUV[height][width];
+				// formerHSV = new HSV[height][width];
 				first = true;
 			}
 
 			RGB[][] outputRGB = new RGB[height][width];
 			int ind = 0;
-			
+			// read input, covert to yuv space
 			for(int y = 0; y < height; y++)
 			{
 				for(int x = 0; x < width; x++)
 				{
-					
-
 					int r = Byte.toUnsignedInt(bytes[ind]);
 					int g = Byte.toUnsignedInt(bytes[ind+height*width]);
 					int b = Byte.toUnsignedInt(bytes[ind+height*width*2]); 
 
 					RGB rgb = new RGB(r,g,b);
-					//convert to yuv space and compare to former frames' average yuv
 					YUV yuv = RGBtoYUV(rgb);
+					// HSV hsv = RGBtoHSV(rgb);
+
+					// RGB frgb = formerRGB[y][x];
 					YUV fyuv = formerYUV[y][x];
+					// HSV fhsv = formerHSV[y][x];
 
 					if(first) {
-						
-						r = Byte.toUnsignedInt(backgroundBytes[ind]);
-						g = Byte.toUnsignedInt(backgroundBytes[ind+height*width]);
-						b = Byte.toUnsignedInt(backgroundBytes[ind+height*width*2]); 
-					
+						if(useColorBackground) {
+							r = 0;
+							g = 255;
+							b = 0;
+						} else {
+							r = Byte.toUnsignedInt(backgroundBytes[ind]);
+							g = Byte.toUnsignedInt(backgroundBytes[ind+height*width]);
+							b = Byte.toUnsignedInt(backgroundBytes[ind+height*width*2]); 
+						}
+						// formerRGB[y][x] = rgb;
 						formerYUV[y][x] = yuv;
+						// formerHSV[y][x] = hsv;
 					} else {
+						// double diffRGB = (Math.abs((double)r - frgb.r)/255
+						// 			+ Math.abs((double)g - frgb.g)/255
+						// 			+ Math.abs((double)b - frgb.b)/255)/3;
 
-						// calculate yuv diff by three channels' average in 0~1 scale
 						double diffYUV = (Math.abs(yuv.y - fyuv.y)/255
 									+ Math.abs(yuv.u - fyuv.u)/255
 									+ Math.abs(yuv.v - fyuv.v)/255)/3;
 
-						boolean shouldBePreserved = (diffYUV > 0.10); 
+						// double diffHSV = (Math.abs(hsv.h - fhsv.h)/360
+						// + Math.abs(hsv.s - fhsv.s)
+						// + Math.abs(hsv.v - fhsv.v))/3;
+
+
+						boolean shouldBePreserved = (diffYUV > 0.10);//diffHSV > 0.30;//(diffYUV > 0.10);//  (diffRGB > 0.4) || 
 
 						if(!shouldBePreserved){
-							
-							r = Byte.toUnsignedInt(backgroundBytes[ind]);
-							g = Byte.toUnsignedInt(backgroundBytes[ind+height*width]);
-							b = Byte.toUnsignedInt(backgroundBytes[ind+height*width*2]); 
-							
+							if(useColorBackground) {
+								r = 0;
+								g = 255;
+								b = 0;
+							} else {
+								r = Byte.toUnsignedInt(backgroundBytes[ind]);
+								g = Byte.toUnsignedInt(backgroundBytes[ind+height*width]);
+								b = Byte.toUnsignedInt(backgroundBytes[ind+height*width*2]); 
+							}
 						} 
+
+						// formerRGB[y][x] = new RGB((rgb.r+frgb.r*(i-1))/i,(rgb.g+frgb.g*(i-1))/i,(rgb.b+frgb.b*(i-1))/i);
 						formerYUV[y][x] = new YUV((yuv.y+fyuv.y*(i-1))/i,(yuv.u+fyuv.u*(i-1))/i,(yuv.v+fyuv.v*(i-1))/i);
+						// formerHSV[y][x] = new HSV((hsv.h+fhsv.h*(i-1))/i,(hsv.s+fhsv.s*(i-1))/i,(hsv.v+fhsv.v*(i-1))/i);
 					}
 
 					
@@ -286,8 +313,6 @@ public class ImageDisplay {
 					int g = Byte.toUnsignedInt(bytes[ind+height*width]);
 					int b = Byte.toUnsignedInt(bytes[ind+height*width*2]); 
 
-					// if(x==1 && y==1) {System.out.println("["+r+","+g+","+b+"]");}
-
 					RGB rgb = new RGB(r,g,b);
 					HSV hsv = RGBtoHSV(rgb);
 					if(Math.abs(hsv.h - h_greencenter) > h_threshold || hsv.s < s_threshold || hsv.v < v_threshold){
@@ -297,10 +322,35 @@ public class ImageDisplay {
 						g = (rgb.g);
 						b = (rgb.b);
 					} else {
-						r = Byte.toUnsignedInt(backgroundBytes[ind]);
-						g = Byte.toUnsignedInt(backgroundBytes[ind+height*width]);
-						b = Byte.toUnsignedInt(backgroundBytes[ind+height*width*2]); 
+						if(useColorBackground){
+							r = 255;
+							g = 0;
+							b = 0;
+						} else {
+							r = Byte.toUnsignedInt(backgroundBytes[ind]);
+							g = Byte.toUnsignedInt(backgroundBytes[ind+height*width]);
+							b = Byte.toUnsignedInt(backgroundBytes[ind+height*width*2]); 
+						}
 					}
+
+					// if(Math.abs(hsv.h - h_greencenter) < h_threshold && hsv.s > s_threshold && hsv.v > v_threshold){
+					// 	if(useColorBackground){
+					// 		r = 255;
+					// 		g = 0;
+					// 		b = 0;
+					// 	} else {
+					// 		r = Byte.toUnsignedInt(backgroundBytes[ind]);
+					// 		g = Byte.toUnsignedInt(backgroundBytes[ind+height*width]);
+					// 		b = Byte.toUnsignedInt(backgroundBytes[ind+height*width*2]); 
+					// 	}
+					// } else {
+
+					// 	rgb = HSVtoRGB(hsv);
+
+					// 	r = (rgb.r);
+					// 	g = (rgb.g);
+					// 	b = (rgb.b);
+					// }
 
 					outputRGB[y][x] = new RGB(r,g,b);
 					ind++;
