@@ -65,55 +65,11 @@ public class ImageDisplay {
 	int kernel = 3;// 3 or 5
 	int h_threshold = 50; // h threshold, out of h_greencenter +- h_threshold should be extracted as foreground
 	int h_greencenter = 120; 
-	double s_threshold = 0.218; // s less than s_threshold should be extracted as foreground
+	double s_threshold = 0.25; // s less than s_threshold should be extracted as foreground
 	double v_threshold = 0.3; // v less than v_threshold should be extracted as foreground 
 	long fps = 1000/24; // default
 	YUV[][] formerYUV;
-	
-	private RGB HSVtoRGB(HSV hsv) {
-		int r, g, b;
-		double c, x, m, r_1, g_1, b_1;
-
-		c = hsv.s * hsv.v;
-		x = c * (1 - Math.abs((hsv.h / 60) % 2 -1));
-		m = hsv.v - c;
-
-		if(hsv.h >= 300) {
-			r_1 = c;
-			g_1 = 0;
-			b_1 = x;
-		} else if(hsv.h >= 240) {
-			r_1 = x;
-			g_1 = 0;
-			b_1 = c;
-		} else if(hsv.h >= 180) {
-			r_1 = 0;
-			g_1 = x;
-			b_1 = c;
-		} else if(hsv.h >= 120) {
-			r_1 = 0;
-			g_1 = c;
-			b_1 = x;
-		} else if(hsv.h >= 60) {
-			r_1 = x;
-			g_1 = c;
-			b_1 = 0;
-		} else {
-			r_1 = c;
-			g_1 = x;
-			b_1 = 0;
-		}
-
-		r = (int) Math.round((r_1 + m) * 255);
-		g = (int) Math.round((g_1 + m) * 255);
-		b = (int) Math.round((b_1 + m) * 255);
-
-		r = r<0?0:r>255?255:r;
-		g = g<0?0:g>255?255:g;
-		b = b<0?0:b>255?255:b;
-
-		return new RGB(r, g, b);
-	}
+	int[][] foregroundMap;
 
 	private HSV RGBtoHSV(RGB rgb) {
 		double h,s,v, cmax, cmin, diff, r, g, b;
@@ -224,9 +180,6 @@ public class ImageDisplay {
 				}
 			}
 
-			// perform Gaussian Blur
-			outputRGB = gaussianBlur(outputRGB, kernel);
-
 			// set img
 			setImgRGB(outputRGB, img);
 
@@ -274,41 +227,55 @@ public class ImageDisplay {
 
 			backgroundRaf.read(backgroundBytes);
 
-			int ind = 0;
+			// int ind = 0;
 
 			RGB[][] outputRGB = new RGB[height][width];
+			foregroundMap = new int[height][width];
 
 			for(int y = 0; y < height; y++)
 			{
 				for(int x = 0; x < width; x++)
 				{
-					int r = Byte.toUnsignedInt(bytes[ind]);
-					int g = Byte.toUnsignedInt(bytes[ind+height*width]);
-					int b = Byte.toUnsignedInt(bytes[ind+height*width*2]); 
+					int r = Byte.toUnsignedInt(bytes[y*width+x]);
+					int g = Byte.toUnsignedInt(bytes[y*width+x+height*width]);
+					int b = Byte.toUnsignedInt(bytes[y*width+x+height*width*2]); 
 
 					// if(x==1 && y==1) {System.out.println("["+r+","+g+","+b+"]");}
 
 					RGB rgb = new RGB(r,g,b);
 					HSV hsv = RGBtoHSV(rgb);
-					if(Math.abs(hsv.h - h_greencenter) > h_threshold || hsv.s < s_threshold || hsv.v < v_threshold){
-						rgb = HSVtoRGB(hsv);
 
+					if(Math.abs(hsv.h-h_greencenter) <= h_threshold && hsv.s >= s_threshold && hsv.v >= v_threshold)  {
+						r = Byte.toUnsignedInt(backgroundBytes[y*width+x]);
+						g = Byte.toUnsignedInt(backgroundBytes[y*width+x+height*width]);
+						b = Byte.toUnsignedInt(backgroundBytes[y*width+x+height*width*2]); 
+
+						foregroundMap[y][x] = 0;
+
+					} else {
 						r = (rgb.r);
 						g = (rgb.g);
 						b = (rgb.b);
-					} else {
-						r = Byte.toUnsignedInt(backgroundBytes[ind]);
-						g = Byte.toUnsignedInt(backgroundBytes[ind+height*width]);
-						b = Byte.toUnsignedInt(backgroundBytes[ind+height*width*2]); 
+
+						foregroundMap[y][x] = 1;
 					}
 
 					outputRGB[y][x] = new RGB(r,g,b);
-					ind++;
 				}
 			}
 
-			// perform Gaussian blur
-			outputRGB = gaussianBlur(outputRGB, kernel);
+			// boundary blending
+			// perform gaussian blur on the boundary pixels
+			for(int y = 3; y < height -3; y++)
+			{
+				for(int x = 3; x < width -3; x++)
+				{
+					if(checkBoundary(foregroundMap, y, x, foregroundMap[y][x])) {
+						outputRGB[y][x] = gaussianBlur3x3(outputRGB, y, x);
+					}
+					
+				}
+			}
 
 			// set img rgb
 			setImgRGB(outputRGB, img);
@@ -328,115 +295,31 @@ public class ImageDisplay {
 		}
 	}
 
-	private RGB[][] gaussianBlur(RGB[][] outputRGB, int kernel) {
-		if(kernel == 3) {
-			outputRGB = gaussianBlur3x3Row(outputRGB);
-			outputRGB = gaussianBlur3x3Col(outputRGB);
-		} 
-
-		if(kernel == 5) {
-			outputRGB = gaussianBlur5x5Row(outputRGB);
-			outputRGB = gaussianBlur5x5Col(outputRGB);
+	private boolean checkBoundary(int[][] map, int y, int x, int val){
+		for(int i = -3; i <= 3; i++) {
+			for(int j = -3; j <= 3; j++ ){
+				if(map[y+i][x+j] != val) return true;
+			}
 		}
 
-		return outputRGB;
+		return false;
 	}
 
-	private RGB[][] gaussianBlur3x3Row(RGB[][] outputRGB) {
+	private RGB gaussianBlur3x3(RGB[][] outputRGB, int y, int x) {
 		int[][] coefficient = {{1,2,1},{2,4,2},{1,2,1}};
-		for(int y = 1; y < height-1; y++) 
-		{
-			for(int x = 1; x < width-1; x++)
-			{
-				int r = 0, g = 0, b = 0;
-				for(int i = -1; i <=1; i++){
-					for(int j = -1; j <=1; j++){
-						r += outputRGB[y+i][x+j].r * coefficient[i+1][j+1];
-						g += outputRGB[y+i][x+j].g * coefficient[i+1][j+1];
-						b += outputRGB[y+i][x+j].b * coefficient[i+1][j+1];
-					}
-				}
-				r /= 16;
-				g /= 16;
-				b /= 16;
-
-				outputRGB[y][x] = new RGB(r, g, b);
+		int r = 0, g = 0, b = 0;
+		for(int i = -1; i <=1; i++){
+			for(int j = -1; j <=1; j++){
+				r += outputRGB[y+i][x+j].r * coefficient[i+1][j+1];
+				g += outputRGB[y+i][x+j].g * coefficient[i+1][j+1];
+				b += outputRGB[y+i][x+j].b * coefficient[i+1][j+1];
 			}
 		}
+		r /= 16;
+		g /= 16;
+		b /= 16;
 
-		return outputRGB;
-	}
-
-	private RGB[][] gaussianBlur3x3Col(RGB[][] outputRGB) {
-		int[][] coefficient = {{1,2,1},{2,4,2},{1,2,1}};
-		for(int x = 1; x < width-1; x++) 
-		{
-			for(int y = 1; y < height-1; y++)
-			{
-				int r = 0, g = 0, b = 0;
-				for(int i = -1; i <=1; i++){
-					for(int j = -1; j <=1; j++){
-						r += outputRGB[y+i][x+j].r * coefficient[i+1][j+1];
-						g += outputRGB[y+i][x+j].g * coefficient[i+1][j+1];
-						b += outputRGB[y+i][x+j].b * coefficient[i+1][j+1];
-					}
-				}
-				r /= 16;
-				g /= 16;
-				b /= 16;
-
-				outputRGB[y][x] = new RGB(r, g, b);
-			}
-		}
-		return outputRGB;
-	}
-
-	private RGB[][] gaussianBlur5x5Row(RGB[][] outputRGB) {
-		int[][] coefficient = {{1,4,7,4,1},{4,16,26,16,4},{7,26,41,26,7},{4,16,26,16,4},{1,4,7,4,1}};
-
-		for(int y = 2; y < height-2; y++){
-			for(int x = 2; x < width-2; x++) {
-				int r = 0, g = 0, b = 0;
-				for(int i = -2; i <=2; i++){
-					for(int j = -2; j <=2; j++){
-						r += outputRGB[y+i][x+j].r * coefficient[i+2][j+2];
-						g += outputRGB[y+i][x+j].g * coefficient[i+2][j+2];
-						b += outputRGB[y+i][x+j].b * coefficient[i+2][j+2];
-					}
-				}
-				r /= 273;
-				g /= 273;
-				b /= 273;
-
-				outputRGB[y][x] = new RGB(r, g, b);
-			}
-		}
-
-		return outputRGB;
-	}
-
-	private RGB[][] gaussianBlur5x5Col(RGB[][] outputRGB) {
-		int[][] coefficient = {{1,4,7,4,1},{4,16,26,16,4},{7,26,41,26,7},{4,16,26,16,4},{1,4,7,4,1}};
-
-		for(int x = 2; x < width-2; x++){
-			for(int y = 2; y < height-2; y++) {
-				int r = 0, g = 0, b = 0;
-				for(int i = -2; i <=2; i++){
-					for(int j = -2; j <=2; j++){
-						r += outputRGB[y+i][x+j].r * coefficient[i+2][j+2];
-						g += outputRGB[y+i][x+j].g * coefficient[i+2][j+2];
-						b += outputRGB[y+i][x+j].b * coefficient[i+2][j+2];
-					}
-				}
-				r /= 273;
-				g /= 273;
-				b /= 273;
-
-				outputRGB[y][x] = new RGB(r, g, b);
-			}
-		}
-
-		return outputRGB;
+		return new RGB(r, g, b);
 	}
 
 	private void setImgRGB(RGB[][] outputRGB, BufferedImage img) {
