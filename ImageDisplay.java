@@ -162,7 +162,7 @@ public class ImageDisplay {
 									+ Math.abs(yuv.u - fyuv.u)/255
 									+ Math.abs(yuv.v - fyuv.v)/255)/3;
 
-						boolean shouldBePreserved = (diffYUV > 0.10); 
+						boolean shouldBePreserved = (diffYUV > 0.00); 
 
 						if(!shouldBePreserved){
 							
@@ -171,7 +171,8 @@ public class ImageDisplay {
 							b = Byte.toUnsignedInt(backgroundBytes[ind+height*width*2]); 
 							
 						} 
-						formerYUV[y][x] = new YUV((yuv.y+fyuv.y*(i-1))/i,(yuv.u+fyuv.u*(i-1))/i,(yuv.v+fyuv.v*(i-1))/i);
+						// formerYUV[y][x] = new YUV((yuv.y+fyuv.y*(i-1))/i,(yuv.u+fyuv.u*(i-1))/i,(yuv.v+fyuv.v*(i-1))/i);
+						formerYUV[y][x] = yuv;
 					}
 
 					

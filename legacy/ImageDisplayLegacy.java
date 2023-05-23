@@ -1,11 +1,10 @@
-package legacy;
 import java.awt.*;
 import java.awt.image.*;
 import java.io.*;
 import javax.swing.*;
 
 
-public class ImageDisplay {
+public class ImageDisplayLegacy {
 
 
 	class HSV{
@@ -580,7 +579,7 @@ public class ImageDisplay {
 	}
 
 	public static void main(String[] args) {
-		ImageDisplay ren = new ImageDisplay();
+		ImageDisplayLegacy ren = new ImageDisplayLegacy();
 		try {
 			ren.showIms(args);
 		} catch (InterruptedException e) {
