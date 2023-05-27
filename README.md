@@ -1,4 +1,4 @@
-# greenteddy
+# ExtractForegroundFromGreen
 merge foreground video (with/without green screen) with background video
 - mode 1 extracts the foreground using HSV to remove green part
 - mode 2 extracts the foreground from a static footage by substracting the pixels and finding those changed  
